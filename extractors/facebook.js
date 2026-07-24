@@ -24,7 +24,7 @@ const fbHeaders = () => {
 
 // Extract the canonical video URL from a fb.watch short link or any FB URL.
 async function resolveCanonical(url) {
-  const res = await fetched(url, { method: 'GET', redirect: 'follow', headers: fbHeaders() });
+  const res = await fetched(url, { method: 'GET', redirect: 'follow', headers: fbHeaders() }, 'facebook');
   return { finalUrl: res.url || url, status: res.status, html: await res.text() };
 }
 
@@ -77,7 +77,7 @@ export async function extract(url) {
     try {
       const alt = new URL(finalUrl || url);
       alt.hostname = alt.hostname.replace(/^www\./, 'm.');
-      const r2 = await fetched(alt.toString(), { redirect: 'follow', headers: fbHeaders() });
+      const r2 = await fetched(alt.toString(), { redirect: 'follow', headers: fbHeaders() }, 'facebook');
       const h2 = await r2.text();
       if (r2.status === 200 && h2.length > html.length) { html = h2; finalUrl = r2.url; status = r2.status; }
     } catch { /* keep original */ }
