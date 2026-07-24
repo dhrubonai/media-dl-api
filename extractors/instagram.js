@@ -11,7 +11,7 @@ function cookie() { return process.env.IG_COOKIE || process.env.INSTAGRAM_COOKIE
 
 // Resolve share URLs (instagr.am, /share/...) to canonical instagram.com URLs.
 async function resolveCanonical(url) {
-  const res = await fetched(url, { method: 'GET', redirect: 'follow', headers: browserHeaders({ cookie: cookie() }) });
+  const res = await fetched(url, { method: 'GET', redirect: 'follow', headers: browserHeaders({ cookie: cookie() }) }, 'instagram');
   return { finalUrl: res.url || url, status: res.status, html: await res.text() };
 }
 
