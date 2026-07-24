@@ -13,7 +13,7 @@ const UA = 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like G
 // Follow vm.tiktok.com / vt.tiktok.com short links to the canonical full URL,
 // from which we extract the numeric video id.
 async function resolveCanonical(url) {
-  const res = await fetched(url, {
+  const res = await fetched(url, { platform: 'tiktok', 
     method: 'GET',
     redirect: 'follow',
     headers: browserHeaders({ extra: { 'User-Agent': UA } })
@@ -31,7 +31,7 @@ async function resolveCanonical(url) {
 // from a server IP for most public posts).
 async function fetchAweme(videoId, region = 'TT') {
   const url = `https://www.tiktok.com/api/item/detail/?aid=1988&app_language=en&region=${region}&itemId=${videoId}`;
-  const res = await fetched(url, { headers: browserHeaders({ extra: { 'User-Agent': UA, 'Referer': 'https://www.tiktok.com/' } }) });
+  const res = await fetched(url, { platform: 'tiktok',  headers: browserHeaders({ extra: { 'User-Agent': UA, 'Referer': 'https://www.tiktok.com/' } }) });
   if (!res.ok) throw new Error(`TikTok detail API returned ${res.status}`);
   const j = await res.json();
   return j?.itemInfo?.itemStruct || j?.itemStruct || j?.aweme_detail || null;
