@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MediaDL — Multi-Platform Video Downloader API</title>
+<meta name="description" content="Extract direct download links from YouTube, TikTok, Instagram, Facebook and more. Free, fast, no ads.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⬇️</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #0a0e1a;
+    --bg-2: #111726;
+    --surface: #161d30;
+    --border: #243049;
+    --text: #e8ecf5;
+    --muted: #8a93a8;
+    --accent: #6366f1;
+    --accent-2: #8b5cf6;
+    --green: #10b981;
+    --red: #ef4444;
+    --amber: #f59e0b;
+  }
+  html, body { background: var(--bg); color: var(--text); font-family: 'Space Grotesk', system-ui, sans-serif; -webkit-font-smoothing: antialiased; min-height: 100vh; }
+  body { background:
+      radial-gradient(ellipse 80% 50% at 20% 0%, rgba(99,102,241,.15), transparent 60%),
+      radial-gradient(ellipse 60% 40% at 80% 10%, rgba(139,92,246,.12), transparent 60%),
+      var(--bg);
+  }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 0 24px; }
+
+  /* Header */
+  header { padding: 28px 0; border-bottom: 1px solid var(--border); }
+  .nav { display: flex; align-items: center; justify-content: space-between; }
+  .logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 20px; letter-spacing: -.02em; }
+  .logo-mark { width: 32px; height: 32px; border-radius: 9px; background: linear-gradient(135deg, var(--accent), var(--accent-2)); display: grid; place-items: center; font-size: 18px; }
+  .nav-links { display: flex; gap: 22px; align-items: center; }
+  .nav-links a { color: var(--muted); text-decoration: none; font-size: 14px; font-weight: 500; transition: color .15s; }
+  .nav-links a:hover { color: var(--text); }
+  .badge { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--green); border: 1px solid rgba(16,185,129,.3); padding: 4px 10px; border-radius: 999px; background: rgba(16,185,129,.08); }
+
+  /* Hero */
+  .hero { padding: 72px 0 32px; text-align: center; }
+  .hero h1 { font-size: clamp(34px, 6vw, 54px); font-weight: 700; letter-spacing: -.03em; line-height: 1.05; margin-bottom: 18px; }
+  .hero h1 .grad { background: linear-gradient(120deg, #818cf8, #c084fc 60%, #f0abfc); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .hero p { color: var(--muted); font-size: 18px; max-width: 560px; margin: 0 auto 8px; line-height: 1.6; }
+
+  /* Tool */
+  .tool { margin: 40px auto 0; }
+  .input-row { display: flex; gap: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 10px; transition: border-color .15s, box-shadow .15s; }
+  .input-row:focus-within { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(99,102,241,.15); }
+  .input-row input { flex: 1; background: transparent; border: none; outline: none; color: var(--text); font-size: 16px; font-family: inherit; padding: 12px 14px; }
+  .input-row input::placeholder { color: var(--muted); }
+  .btn { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; border: none; border-radius: 10px; padding: 12px 24px; font-size: 15px; font-weight: 600; font-family: inherit; cursor: pointer; transition: transform .1s, opacity .15s; white-space: nowrap; }
+  .btn:hover { opacity: .92; }
+  .btn:active { transform: scale(.98); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .btn.ghost { background: transparent; border: 1px solid var(--border); }
+  .btn.ghost:hover { border-color: var(--muted); }
+
+  .platforms-strip { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 20px; }
+  .chip { font-size: 12px; font-weight: 500; color: var(--muted); border: 1px solid var(--border); padding: 6px 12px; border-radius: 999px; background: var(--bg-2); display: flex; align-items: center; gap: 6px; }
+  .chip .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+  .chip.beta .dot { background: var(--amber); }
+  .chip.soon { opacity: .5; }
+  .chip.soon .dot { background: var(--muted); }
+
+  /* Result */
+  #result { margin-top: 32px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; animation: rise .3s ease; }
+  @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  .meta { display: flex; gap: 18px; padding: 22px; border-bottom: 1px solid var(--border); }
+  .thumb { width: 200px; height: 112px; border-radius: 10px; object-fit: cover; flex-shrink: 0; background: var(--bg-2); }
+  .meta-info { flex: 1; min-width: 0; }
+  .meta-info h3 { font-size: 18px; font-weight: 600; margin-bottom: 8px; line-height: 1.35; }
+  .meta-info .sub { color: var(--muted); font-size: 13px; display: flex; flex-wrap: wrap; gap: 14px; }
+  .meta-info .sub span b { color: var(--text); font-weight: 600; }
+  .platform-tag { display: inline-block; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--accent-2); border: 1px solid rgba(139,92,246,.3); padding: 2px 8px; border-radius: 6px; margin-bottom: 10px; background: rgba(139,92,246,.08); }
+
+  .formats { padding: 8px; }
+  .fmt-head { display: grid; grid-template-columns: 1fr 90px 110px 120px; gap: 12px; padding: 10px 14px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; }
+  .fmt { display: grid; grid-template-columns: 1fr 90px 110px 120px; gap: 12px; padding: 12px 14px; align-items: center; border-top: 1px solid var(--border); font-size: 14px; transition: background .12s; }
+  .fmt:hover { background: var(--bg-2); }
+  .fmt .label { font-weight: 500; display: flex; align-items: center; gap: 8px; }
+  .fmt .label .tag { font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; }
+  .fmt .tag.video { background: rgba(99,102,241,.15); color: #a5b4fc; }
+  .fmt .tag.audio { background: rgba(16,185,129,.15); color: #6ee7b7; }
+  .fmt .tag.image { background: rgba(245,158,11,.15); color: #fcd34d; }
+  .fmt .mono { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--muted); }
+  .fmt .dl { display: flex; gap: 8px; }
+  .fmt .dl a { font-size: 13px; font-weight: 600; color: var(--accent); text-decoration: none; padding: 6px 12px; border: 1px solid var(--border); border-radius: 8px; transition: all .12s; }
+  .fmt .dl a:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+  @media (max-width: 600px) {
+    .meta { flex-direction: column; }
+    .thumb { width: 100%; height: 180px; }
+    .fmt-head { display: none; }
+    .fmt { grid-template-columns: 1fr auto; }
+    .fmt .mono { display: none; }
+  }
+
+  /* States */
+  .state { padding: 60px 20px; text-align: center; }
+  .spinner { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto 16px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .state .txt { color: var(--muted); font-size: 15px; }
+  .error-box { background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.25); border-radius: 12px; padding: 20px; text-align: left; }
+  .error-box .code { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--red); margin-bottom: 6px; }
+  .error-box .msg { font-size: 14px; color: #fca5a5; }
+
+  /* API doc */
+  .docs { padding: 80px 0 40px; border-top: 1px solid var(--border); margin-top: 80px; }
+  .docs h2 { font-size: 28px; font-weight: 700; letter-spacing: -.02em; margin-bottom: 8px; }
+  .docs .lead { color: var(--muted); margin-bottom: 28px; }
+  .doc-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 22px; margin-bottom: 16px; }
+  .doc-card .endpoint { font-family: 'JetBrains Mono', monospace; font-size: 13px; background: var(--bg-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; overflow-x: auto; }
+  .doc-card .method { color: var(--green); font-weight: 600; }
+  .doc-card h4 { font-size: 16px; margin-bottom: 10px; }
+  .doc-card pre { font-family: 'JetBrains Mono', monospace; font-size: 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px; overflow-x: auto; color: #c4cad6; line-height: 1.6; }
+  .doc-card table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .doc-card th, .doc-card td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  .doc-card th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+  .req { color: var(--amber); }
+
+  footer { padding: 32px 0 48px; color: var(--muted); font-size: 13px; text-align: center; border-top: 1px solid var(--border); margin-top: 40px; }
+  footer a { color: var(--text); text-decoration: none; }
+
+  .note { background: rgba(245,158,11,.08); border: 1px solid rgba(245,158,11,.2); border-radius: 10px; padding: 14px 18px; font-size: 13px; color: #fcd34d; margin-top: 18px; line-height: 1.6; }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap nav">
+    <div class="logo"><div class="logo-mark">⬇️</div> MediaDL</div>
+    <nav class="nav-links">
+      <a href="#tool">Downloader</a>
+      <a href="#docs">API Docs</a>
+      <span class="badge">● Live</span>
+    </nav>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="wrap">
+    <h1>Download from <span class="grad">anywhere</span>.<br>Fast, free, no ads.</h1>
+    <p>Paste a link from YouTube, TikTok or Instagram. Get direct download links in seconds — no watermarks, no signups, no tracking.</p>
+
+    <div class="tool" id="tool">
+      <form class="input-row" id="dlForm" autocomplete="off">
+        <input type="text" id="urlInput" placeholder="Paste a video URL — youtube.com/watch?v=…  ·  tiktok.com/@user/video/…  ·  instagram.com/reel/…" spellcheck="false" required>
+        <button type="submit" class="btn" id="goBtn">Extract</button>
+      </form>
+      <div class="platforms-strip">
+        <span class="chip"><span class="dot"></span>YouTube</span>
+        <span class="chip"><span class="dot"></span>TikTok</span>
+        <span class="chip beta"><span class="dot"></span>Instagram</span>
+        <span class="chip beta"><span class="dot"></span>Facebook</span>
+        <span class="chip soon"><span class="dot"></span>Twitter/X</span>
+        <span class="chip soon"><span class="dot"></span>Reddit</span>
+        <span class="chip soon"><span class="dot"></span>SoundCloud</span>
+        <span class="chip soon"><span class="dot"></span>Vimeo</span>
+      </div>
+      <div id="result"></div>
+    </div>
+  </div>
+</section>
+
+<section class="docs" id="docs">
+  <div class="wrap">
+    <h2>API Documentation</h2>
+    <p class="lead">Use the same engine behind this page in your own apps. One endpoint, one parameter.</p>
+
+    <div class="doc-card">
+      <h4>Extract media links</h4>
+      <div class="endpoint"><span class="method">GET</span> /api/download?url=<span style="color:var(--accent-2)">{video_url}</span></div>
+      <table>
+        <tr><th>Parameter</th><th>Required</th><th>Description</th></tr>
+        <tr><td class="req">url</td><td>Yes</td><td>Full URL of the social media video.</td></tr>
+      </table>
+      <pre>const url = "https://youtube.com/watch?v=dQw4w9WgXcQ";
+fetch(`/api/download?url=${encodeURIComponent(url)}`)
+  .then(r => r.json())
+  .then(d => {
+    if (d.status === 'success') {
+      d.data.medias.forEach(m => console.log(m.label, m.url));
+    }
+  });</pre>
+    </div>
+
+    <div class="doc-card">
+      <h4>Response shape</h4>
+      <pre>{
+  "status": "success",
+  "code": "SUCCESS_FETCHED",
+  "meta": { "platform": "YouTube", "execution_time_ms": 2931 },
+  "data": {
+    "title": "Video title",
+    "thumbnail": "https://...",
+    "duration": 213,
+    "author": "Channel name",
+    "platform": "YouTube",
+    "medias": [
+      { "formatId": 137, "label": "mp4 (1080p)", "type": "video",
+        "ext": "mp4", "width": 1920, "height": 1080, "url": "https://..." },
+      { "formatId": 140, "label": "m4a (131kb/s)", "type": "audio", "url": "https://..." }
+    ]
+  }
+}</pre>
+    </div>
+
+    <div class="note">
+      ⚠️ <b>Legal &amp; ethical use:</b> Only download content you own, that is Creative Commons / public domain, or that qualifies as fair use in your jurisdiction. Downloading copyrighted material may violate platform Terms of Service and copyright law. YouTube links expire within ~6 hours and are tied to the requesting IP — consume them promptly.
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    MediaDL · Multi-platform media URL extractor · Runs on Vercel serverless ·
+    <a href="https://hyperagent.com/thread/cmryusbsd0ycr07adedwx0tgz" target="_blank" rel="noopener noreferrer">built with Hyperagent</a>
+  </div>
+</footer>
+
+<script>
+const API = '/api/download';
+const form = document.getElementById('dlForm');
+const input = document.getElementById('urlInput');
+const btn = document.getElementById('goBtn');
+const out = document.getElementById('result');
+
+function esc(s){ return String(s||'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function fmtSize(b){ if(!b) return '—'; const u=['B','KB','MB','GB']; let i=0; while(b>=1024&&i<3){b/=1024;i++;} return b.toFixed(b<10?1:0)+' '+u[i]; }
+function fmtDur(s){ if(!s) return '—'; const m=Math.floor(s/60),x=Math.floor(s%60); return m+':'+String(x).padStart(2,'0'); }
+function fmtNum(n){ if(n==null) return '—'; return Number(n).toLocaleString(); }
+
+function renderError(d){
+  const code = d?.code || 'ERROR';
+  const msg = d?.error?.message || d?.meta?.message || 'Something went wrong.';
+  out.innerHTML = `<div class="error-box"><div class="code">${esc(code)}</div><div class="msg">${esc(msg)}</div></div>`;
+}
+
+function renderResult(d){
+  const data = d.data;
+  const tagCls = { video:'video', audio:'audio', image:'image' }[data.medias[0]?.type] || 'video';
+  const rows = data.medias.map(m => `
+    <div class="fmt">
+      <div class="label"><span class="tag ${tagClsFor(m.type)}">${esc(m.type||'media')}</span>${esc(m.label||m.quality||'format')}</div>
+      <div class="mono">${m.height ? m.height+'p' : (m.bitrate?Math.round(m.bitrate/1000)+'k':'—')}</div>
+      <div class="mono">${esc(m.ext||'—')}</div>
+      <div class="dl"><a href="${esc(m.url)}" target="_blank" rel="noopener noreferrer">Download ↗</a></div>
+    </div>`).join('');
+
+  out.innerHTML = `
+    <div class="card">
+      <div class="meta">
+        ${data.thumbnail ? `<img class="thumb" src="${esc(data.thumbnail)}" alt="" onerror="this.style.opacity=.2">` : ''}
+        <div class="meta-info">
+          <span class="platform-tag">${esc(data.platform||d.meta?.platform)}</span>
+          <h3>${esc(data.title||'Untitled')}</h3>
+          <div class="sub">
+            ${data.author ? `<span>👤 <b>${esc(data.author)}</b></span>`:''}
+            ${data.duration ? `<span>⏱ <b>${fmtDur(data.duration)}</b></span>`:''}
+            ${data.views!=null ? `<span>▶ <b>${fmtNum(data.views)}</b></span>`:''}
+            <span>⚡ <b>${d.meta?.execution_time_ms||0}ms</b></span>
+          </div>
+        </div>
+      </div>
+      <div class="formats">
+        <div class="fmt-head"><div>Format</div><div>Quality</div><div>Ext</div><div></div></div>
+        ${rows}
+      </div>
+    </div>`;
+}
+function tagClsFor(t){ return { video:'video', audio:'audio', image:'image' }[t] || 'video'; }
+
+async function go(url){
+  btn.disabled = true; btn.textContent = 'Extracting…';
+  out.innerHTML = `<div class="state"><div class="spinner"></div><div class="txt">Resolving direct links…</div></div>`;
+  try {
+    const r = await fetch(`${API}?url=${encodeURIComponent(url)}`);
+    const d = await r.json();
+    if (d.status === 'success' && d.data?.medias?.length) renderResult(d);
+    else renderError(d);
+  } catch (e) {
+    renderError({ code:'NETWORK', error:{ message:'Could not reach the API: '+e.message } });
+  } finally {
+    btn.disabled = false; btn.textContent = 'Extract';
+  }
+}
+
+form.addEventListener('submit', e => {
+  e.preventDefault();
+  const url = input.value.trim();
+  if (!url) return;
+  go(url);
+});
+</script>
+</body>
+</html>
