@@ -3,16 +3,20 @@
 // Resolves a TikTok share URL to direct media URLs (no-watermark video, audio,
 // slideshow images) using only Node's built-in fetch + the public embed/redirect
 // endpoints. No npm deps -> fewer build-failure vectors on Vercel.
+// Honors optional PROXY_URL env (residential/mobile) since TikTok blocks
+// datacenter IPs.
+
+import { fetched, browserHeaders } from '../utils/fetcher.js';
 
 const UA = 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36';
 
 // Follow vm.tiktok.com / vt.tiktok.com short links to the canonical full URL,
 // from which we extract the numeric video id.
 async function resolveCanonical(url) {
-  const res = await fetch(url, {
+  const res = await fetched(url, {
     method: 'GET',
     redirect: 'follow',
-    headers: { 'User-Agent': UA }
+    headers: browserHeaders({ extra: { 'User-Agent': UA } })
   });
   const finalUrl = res.url || url;
   const html = await res.text();
@@ -27,7 +31,7 @@ async function resolveCanonical(url) {
 // from a server IP for most public posts).
 async function fetchAweme(videoId, region = 'TT') {
   const url = `https://www.tiktok.com/api/item/detail/?aid=1988&app_language=en&region=${region}&itemId=${videoId}`;
-  const res = await fetch(url, { headers: { 'User-Agent': UA, 'Referer': 'https://www.tiktok.com/' } });
+  const res = await fetched(url, { headers: browserHeaders({ extra: { 'User-Agent': UA, 'Referer': 'https://www.tiktok.com/' } }) });
   if (!res.ok) throw new Error(`TikTok detail API returned ${res.status}`);
   const j = await res.json();
   return j?.itemInfo?.itemStruct || j?.itemStruct || j?.aweme_detail || null;
