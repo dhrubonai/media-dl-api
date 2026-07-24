@@ -46,7 +46,7 @@ export function detectPlatform(url) {
 export const SUPPORTED = PLATFORMS.map((p) => p.id);
 
 // Platforms with a working extractor implemented today.
-export const IMPLEMENTED = ['youtube', 'tiktok', 'facebook'];
+export const IMPLEMENTED = ['youtube', 'tiktok', 'facebook', 'instagram', 'twitter'];
 
 export function isImplemented(platform) {
   return IMPLEMENTED.includes(platform);
