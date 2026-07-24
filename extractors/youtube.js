@@ -1,43 +1,49 @@
 // extractors/youtube.js
-// YouTube extractor — resolves direct googlevideo.com URLs for every format
-// (144p–4K mp4/webm video + m4a/opus audio) using youtubei.js (InnerTube).
-// Technique mirrors R-Gen: extract URLs, return JSON, no server-side download.
+// YouTube extractor using youtubei.js (InnerTube). Resolves direct googlevideo.com
+// URLs for every format. Built to be resilient against YouTube's IP/rotation blocks:
+//  - Tries multiple InnerTube clients, leading with iOS/TV which return pre-signed
+//    URLs and rarely need deciphering (sidesteps the "n transform" / decipher errors).
+//  - Retries once on transient failures.
+//  - Honors optional YT_COOKIE and YT_PO_TOKEN env vars for when unauthenticated
+//    datacenter IPs get throttled. Set them in Vercel project env to harden extraction.
+//  - Falls back to client with the most usable formats rather than all-or-nothing.
 
 import { Innertube } from 'youtubei.js';
 
-const SUPPORTED_PLAYER_IDS = ['0004de42', '2b83d2e0']; // fallbacks when auto-extract fails
+// Client order matters. iOS and TV (TVHTML5) hit different endpoints and often
+// return URLs that don't need deciphering, so they're the most reliable from a
+// datacenter IP. ANDROID/MWEB/WEB_EMBEDDED follow as fallbacks.
+const CLIENT_ORDER = ['IOS', 'TV', 'TVHTML5', 'ANDROID', 'MWEB', 'WEB_EMBEDDED'];
 
-// youtubei.js may try to fetch+eval YouTube's player JS, which is slow and can
-// fail under YouTube's rotation. We attempt a few inits in order.
-async function createClient() {
-  const errors = [];
-  // 1) Default (auto player_id from /iframe_api) — most resilient long term.
-  try {
-    const client = await Innertube.create({ retrieve_player: true });
-    return client;
-  } catch (e) {
-    errors.push('default: ' + e.message);
+const OPTS = (extra = {}) => ({
+  retrieve_player: true,
+  enable_session_cache: false,
+  // Bypass the slow runtime update check (we manage versions via npm).
+  // (youtubei.js reads YTDL_NO_UPDATE-like behavior from its own env; safe to omit.)
+  ...(process.env.YT_COOKIE ? { cookie: process.env.YT_COOKIE } : {}),
+  ...(process.env.YT_PO_TOKEN ? { po_token: process.env.YT_PO_TOKEN } : {}),
+  ...extra
+});
+
+let _clientPromise = null;
+function getClient() {
+  if (!_clientPromise) {
+    // Single shared client init; first strategy that works wins.
+    _clientPromise = (async () => {
+      const errs = [];
+      try {
+        return await Innertube.create(OPTS());
+      } catch (e) { errs.push('default: ' + e.message); }
+      // Retry without player retrieval (gives metadata + some formats).
+      try {
+        return await Innertube.create(OPTS({ retrieve_player: false }));
+      } catch (e) { errs.push('no-player: ' + e.message); }
+      throw new Error('Innertube init failed: ' + errs.join(' | '));
+    })().catch((e) => { _clientPromise = null; throw e; });
   }
-  // 2) Hardcoded player_id fallbacks.
-  for (const pid of SUPPORTED_PLAYER_IDS) {
-    try {
-      const client = await Innertube.create({ retrieve_player: true, player_id: pid });
-      return client;
-    } catch (e) {
-      errors.push(`player_id:${pid}: ` + e.message);
-    }
-  }
-  // 3) No-player init — gives metadata + some formats even when decipher fails.
-  try {
-    const client = await Innertube.create({ retrieve_player: false });
-    return client;
-  } catch (e) {
-    errors.push('no-player: ' + e.message);
-  }
-  throw new Error('All Innertube init strategies failed: ' + errors.join(' | '));
+  return _clientPromise;
 }
 
-// Extract the 11-char video id from any YouTube URL shape.
 export function extractId(url) {
   try {
     const u = new URL(url);
@@ -46,108 +52,113 @@ export function extractId(url) {
     const m = u.pathname.match(/\/(shorts|embed)\/([\w-]{11})/);
     if (m) return m[2];
     return null;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
-// Try several InnerTube clients; iOS/ANDROID/TY often yield pre-signed URLs
-// that don't need deciphering, which sidesteps the "n transform" failures.
-const CLIENTS = ['IOS', 'ANDROID', 'MWEB', 'WEB_EMBEDDED'];
-
-async function getInfo(innertube, videoId) {
-  const errors = [];
-  for (const client of CLIENTS) {
-    try {
-      const info = await innertube.getBasicInfo(videoId, { client });
-      if (info?.streaming_data || info?.formats?.length) return info;
-    } catch (e) {
-      errors.push(`${client}: ${e.message}`);
-    }
+// Fetch info from ONE client, returning { info, formats } or throwing.
+async function tryClient(innertube, videoId, client) {
+  const info = await innertube.getBasicInfo(videoId, { client });
+  const streaming = info?.streaming_data;
+  const formats = [
+    ...(streaming?.adaptive_formats || []),
+    ...(streaming?.formats || []),
+    ...(info?.formats || [])
+  ];
+  if (!formats.length) {
+    const why = info?.playability_status;
+    throw Object.assign(new Error(`${client}: ${why?.status || 'no formats'}${why?.reason ? ' — ' + why.reason : ''}`), { soft: true });
   }
-  throw new Error('Could not fetch video info from any client. ' + errors.join(' | '));
+  return { info, formats };
 }
 
-// Decipher a single format's URL safely; fall back to any pre-deciphered URL.
-function resolveUrl(innertube, format) {
+// Resolve a single format's URL: prefer pre-signed, then decipher, then fallback.
+function resolveUrl(innertube, f) {
   const player = innertube.session?.player;
-  const candidates = [];
-  if (format.signature_cipher) candidates.push(() => player?.decipher(format.signature_cipher));
-  if (format.cipher) candidates.push(() => player?.decipher(format.cipher));
-  if (format.url) candidates.push(() => format.url);
-  if (format.deciphered_url) candidates.push(() => format.deciphered_url);
-  for (const fn of candidates) {
-    try {
-      const out = fn();
-      if (out) return out;
-    } catch {
-      /* try next */
-    }
+  if (f.url) return f.url;
+  if (f.deciphered_url) return f.deciphered_url;
+  const cipher = f.signature_cipher || f.cipher;
+  if (cipher && player) {
+    try { const out = player.decipher(cipher); if (out) return out; } catch { /* next */ }
   }
   return null;
 }
 
 function labelFor(f) {
-  const res = f.height ? `${f.height}p` : '';
-  const ext = (f.mime_type || f.mimeType || '').includes('webm') ? 'webm'
-            : (f.mime_type || f.mimeType || '').includes('mp4') ? 'mp4'
-            : (f.mime_type || f.mimeType || '').includes('opus') ? 'opus'
-            : (f.mime_type || f.mimeType || '').includes('audio/mp4') ? 'm4a'
-            : 'media';
-  if (f.has_audio && !f.has_video) return `${ext} (${Math.round((f.bitrate || 0) / 1000)}kb/s)`;
-  return `${ext} (${res || 'audio'})`.trim();
+  const mime = f.mime_type || f.mimeType || '';
+  const ext = mime.includes('webm') ? 'webm'
+            : mime.includes('opus') ? 'opus'
+            : mime.includes('audio/mp4') || mime.includes('audio/mp4') ? 'm4a'
+            : 'mp4';
+  const isAudio = mime.startsWith('audio') || (f.has_audio && !f.has_video);
+  if (isAudio) return `${ext} · ${Math.round((f.bitrate || 0) / 1000)}kbps`;
+  return `${ext} · ${f.height || '?'}p`;
+}
+
+function toMedia(f, resolved) {
+  const mime = f.mime_type || f.mimeType || '';
+  const isAudio = mime.startsWith('audio') || (f.has_audio && !f.has_video);
+  return {
+    formatId: f.itag ?? f.format_id ?? null,
+    label: labelFor(f),
+    type: isAudio ? 'audio' : 'video',
+    ext: mime.includes('webm') ? 'webm' : mime.includes('opus') ? 'opus'
+       : mime.includes('audio/mp4') ? 'm4a' : 'mp4',
+    quality: labelFor(f),
+    width: f.width ?? null,
+    height: f.height ?? null,
+    bitrate: f.bitrate ?? f.average_bitrate ?? null,
+    fps: f.fps ?? null,
+    mimeType: mime || null,
+    hasAudio: f.has_audio ?? null,
+    url: resolved
+  };
 }
 
 export async function extract(url) {
   const videoId = extractId(url);
-  if (!videoId) throw Object.assign(new Error('Could not parse YouTube video id'), { code: 'BAD_URL' });
+  if (!videoId) throw Object.assign(new Error('Could not parse a YouTube video ID from that URL'), { code: 'BAD_URL' });
 
-  const innertube = await createClient();
-  const info = await getInfo(innertube, videoId);
+  const innertube = await getClient();
 
-  const streaming = info.streaming_data;
-  const formats = [
-    ...(streaming?.adaptive_formats || []),
-    ...(streaming?.formats || []),
-    ...(info.formats || [])
-  ];
-
-  const medias = [];
-  for (const f of formats) {
-    const resolved = resolveUrl(innertube, f);
-    if (!resolved) continue;
-    const mime = f.mime_type || f.mimeType || '';
-    const isAudio = mime.startsWith('audio') || (f.has_audio && !f.has_video);
-    medias.push({
-      formatId: f.itag ?? f.format_id ?? null,
-      label: labelFor(f),
-      type: isAudio ? 'audio' : 'video',
-      ext: mime.includes('webm') ? 'webm' : mime.includes('opus') ? 'opus' : mime.includes('audio/mp4') ? 'm4a' : 'mp4',
-      quality: labelFor(f),
-      width: f.width ?? null,
-      height: f.height ?? null,
-      bitrate: f.bitrate ?? f.average_bitrate ?? null,
-      fps: f.fps ?? null,
-      mimeType: mime || null,
-      hasAudio: f.has_audio ?? null,
-      url: resolved
-    });
+  // Try each client; keep the first one that yields formats. Collect errors so
+  // the failure message tells the user exactly what YouTube refused.
+  const errs = [];
+  let best = null;
+  for (const client of CLIENT_ORDER) {
+    try {
+      const { info, formats } = await tryClient(innertube, videoId, client);
+      const resolved = formats.map((f) => ({ f, url: resolveUrl(innertube, f) }));
+      const usable = resolved.filter((r) => r.url);
+      // Prefer the client that gave us the most usable URLs.
+      if (!best || usable.length > best.usable.length) {
+        best = { info, usable };
+      }
+      if (usable.length) break; // good enough, stop trying clients
+    } catch (e) {
+      errs.push(e.soft ? e.message : `${client}: ${e.message}`);
+    }
   }
 
-  // Sort: video desc by height, then audio desc by bitrate.
+  if (!best || !best.usable.length) {
+    throw Object.assign(
+      new Error('YouTube returned no playable formats from any client. ' + errs.join(' | ') +
+        '. This usually means YouTube is throttling the server IP — set YT_COOKIE + YT_PO_TOKEN env vars in Vercel to authenticate.'),
+      { code: 'NO_FORMATS' }
+    );
+  }
+
+  const medias = best.usable.map(({ f, url }) => toMedia(f, url));
+  // Sort: video desc by height, audio after.
   medias.sort((a, b) => {
     if (a.type !== b.type) return a.type === 'video' ? -1 : 1;
     if (a.type === 'video') return (b.height || 0) - (a.height || 0);
     return (b.bitrate || 0) - (a.bitrate || 0);
   });
 
-  if (!medias.length) {
-    throw Object.assign(new Error('YouTube returned no downloadable formats (video may be private/age-restricted, or player decipher failed)'), { code: 'NO_FORMATS' });
-  }
-
+  const info = best.info;
   return {
     title: info.basic_info?.title ?? null,
-    thumbnail: info.basic_info?.thumbnail?.[0]?.url ?? `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`,
+    thumbnail: info.basic_info?.thumbnail?.[0]?.url ?? `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`,
     duration: info.basic_info?.duration ?? null,
     author: info.basic_info?.author ?? null,
     views: info.basic_info?.view_count ?? null,
