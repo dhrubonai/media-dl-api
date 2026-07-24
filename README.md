@@ -2,7 +2,7 @@
 
 Extract direct download links from YouTube, TikTok (and more coming) — returns JSON with every available format. Runs entirely on **Vercel serverless (Hobby tier, 10s limit)**. No server-side file downloading or conversion; the browser pulls directly from the source CDN.
 
-Built using the technique demonstrated by [R-Gen APIs](https://r-gengpt-api.vercel.app/) but as a fresh, independent project.
+Same technique used by [R-Gen APIs](https://r-gengpt-api.vercel.app/) — built here as a fresh, independent project.
 
 ## How it works
 
