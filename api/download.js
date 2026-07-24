@@ -6,7 +6,8 @@ import { ok, fail, withTimeout, send } from '../utils/response.js';
 
 const extractors = {
   youtube: () => import('../extractors/youtube.js').then((m) => m.extract),
-  tiktok: () => import('../extractors/tiktok.js').then((m) => m.extract)
+  tiktok: () => import('../extractors/tiktok.js').then((m) => m.extract),
+  facebook: () => import('../extractors/facebook.js').then((m) => m.extract)
 };
 
 export default async function handler(req, res) {
@@ -26,7 +27,7 @@ export default async function handler(req, res) {
   }
 
   if (!isImplemented(platform)) {
-    return send(res, fail('NOT_YET_IMPLEMENTED', `${platform} support is detected but the extractor is not built yet. Currently working: YouTube, TikTok.`, { meta: { platform } }), 501);
+    return send(res, fail('NOT_YET_IMPLEMENTED', `${platform} support is detected but the extractor is not built yet. Currently working: YouTube, TikTok, Facebook.`, { meta: { platform } }), 501);
   }
 
   try {
