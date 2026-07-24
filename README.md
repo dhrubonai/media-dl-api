@@ -49,7 +49,7 @@ curl "https://YOUR-DOMAIN/api/download?url=https://youtube.com/watch?v=dQw4w9WgX
 | Platform | Status | Engine |
 |----------|--------|--------|
 | YouTube | ✅ Live | [`youtubei.js`](https://github.com/LuanRT/YouTube.js) (InnerTube) |
-| TikTok | ✅ Live | [`@tobyg74/tiktok-api-dl`](https://github.com/TobyG74/tiktok-api-dl) |
+| TikTok | ✅ Live | built-in (zero-dep, public detail API + HTML fallback) |
 | Instagram, Facebook, Twitter/X, Reddit, SoundCloud, Vimeo, Pinterest, Twitch, Bilibili | 🔜 Detected, extractor TODO | — |
 
 ## Project structure
