@@ -5,6 +5,9 @@
 //  2) Falling back to the public oEmbed/graphvideo metadata.
 // Facebook aggressively gates content; without cookies many posts return a
 // login wall. We extract what's publicly available and fail honestly otherwise.
+// Honors optional PROXY_URL env (residential/mobile) since FB blocks datacenter IPs.
+
+import { fetched } from '../utils/fetcher.js';
 
 const UA = 'Mozilla/5.0 (Linux; Android 12; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36';
 
@@ -14,7 +17,6 @@ const fbHeaders = () => {
   const h = { 'User-Agent': UA, 'Accept-Language': 'en-US,en;q=0.9' };
   if (process.env.FB_COOKIE) {
     h['Cookie'] = process.env.FB_COOKIE;
-    // A desktop UA pairs better with a real browser cookie.
     h['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
   }
   return h;
@@ -22,7 +24,7 @@ const fbHeaders = () => {
 
 // Extract the canonical video URL from a fb.watch short link or any FB URL.
 async function resolveCanonical(url) {
-  const res = await fetch(url, { method: 'GET', redirect: 'follow', headers: fbHeaders() });
+  const res = await fetched(url, { method: 'GET', redirect: 'follow', headers: fbHeaders() });
   return { finalUrl: res.url || url, status: res.status, html: await res.text() };
 }
 
@@ -75,7 +77,7 @@ export async function extract(url) {
     try {
       const alt = new URL(finalUrl || url);
       alt.hostname = alt.hostname.replace(/^www\./, 'm.');
-      const r2 = await fetch(alt.toString(), { redirect: 'follow', headers: fbHeaders() });
+      const r2 = await fetched(alt.toString(), { redirect: 'follow', headers: fbHeaders() });
       const h2 = await r2.text();
       if (r2.status === 200 && h2.length > html.length) { html = h2; finalUrl = r2.url; status = r2.status; }
     } catch { /* keep original */ }
