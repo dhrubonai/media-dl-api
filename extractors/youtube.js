@@ -9,17 +9,16 @@
 //  - Falls back to client with the most usable formats rather than all-or-nothing.
 
 import { Innertube } from 'youtubei.js';
+import { makeFetch, hasProxy } from '../utils/fetcher.js';
 
 // Client order matters. iOS and TV (TVHTML5) hit different endpoints and often
 // return URLs that don't need deciphering, so they're the most reliable from a
 // datacenter IP. ANDROID/MWEB/WEB_EMBEDDED follow as fallbacks.
 const CLIENT_ORDER = ['IOS', 'TV', 'TVHTML5', 'ANDROID', 'MWEB', 'WEB_EMBEDDED'];
 
-const OPTS = (extra = {}) => ({
+const OPTS_BASE = (extra = {}) => ({
   retrieve_player: true,
   enable_session_cache: false,
-  // Bypass the slow runtime update check (we manage versions via npm).
-  // (youtubei.js reads YTDL_NO_UPDATE-like behavior from its own env; safe to omit.)
   ...(process.env.YT_COOKIE ? { cookie: process.env.YT_COOKIE } : {}),
   ...(process.env.YT_PO_TOKEN ? { po_token: process.env.YT_PO_TOKEN } : {}),
   ...extra
@@ -28,15 +27,21 @@ const OPTS = (extra = {}) => ({
 let _clientPromise = null;
 function getClient() {
   if (!_clientPromise) {
-    // Single shared client init; first strategy that works wins.
     _clientPromise = (async () => {
       const errs = [];
+      // Build base opts, then attach a proxy-aware fetch if a proxy is configured.
+      const base = OPTS_BASE();
+      if (hasProxy('youtube')) {
+        try { base.fetch = await makeFetch('youtube'); } catch { /* proxy unavailable, fall back to direct */ }
+      }
       try {
-        return await Innertube.create(OPTS());
+        return await Innertube.create(base);
       } catch (e) { errs.push('default: ' + e.message); }
       // Retry without player retrieval (gives metadata + some formats).
       try {
-        return await Innertube.create(OPTS({ retrieve_player: false }));
+        const np = OPTS_BASE({ retrieve_player: false });
+        if (hasProxy('youtube')) { try { np.fetch = await makeFetch('youtube'); } catch {} }
+        return await Innertube.create(np);
       } catch (e) { errs.push('no-player: ' + e.message); }
       throw new Error('Innertube init failed: ' + errs.join(' | '));
     })().catch((e) => { _clientPromise = null; throw e; });
