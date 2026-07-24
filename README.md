@@ -82,15 +82,57 @@ vercel dev   # serves index.html + /api/* on localhost:3000
 
 This repo is wired for Vercel. Import it on Vercel (or deploy via the Vercel API) — no extra config needed; `vercel.json` sets the Node 20 runtime, 10s timeout, and 512MB memory.
 
+## Configuration (env vars)
+
+Set these in **Vercel → your project → Settings → Environment Variables**. None are required for the site to run; they unlock extraction from platforms that block datacenter IPs.
+
+### Proxy (recommended — fixes YouTube, Facebook, Instagram, TikTok at once)
+
+A residential/mobile proxy makes every request come from a home/mobile IP instead of Vercel's datacenter IP, which is what triggers YouTube's "Sign in to confirm you're not a bot" and Facebook's HTTP 400.
+
+| Var | Scope | Example |
+|-----|-------|---------|
+| `PROXY_URL` | all platforms | `http://user:pass@p.brightdata.com:22225` |
+| `YT_PROXY_URL` | YouTube only (overrides `PROXY_URL`) | `http://user:pass@host:port` |
+| `FB_PROXY_URL` | Facebook only | `http://user:pass@host:port` |
+| `IG_PROXY_URL` | Instagram only | `http://user:pass@host:port` |
+| `TT_PROXY_URL` | TikTok only | `http://user:pass@host:port` |
+| `TW_PROXY_URL` | Twitter/X only | `http://user:pass@host:port` |
+
+Residential proxy providers that work: **Bright Data**, **Smartproxy**, **Soax**, **IPRoyal**, **Oxylabs**. After signing up, each gives you an endpoint URL in `http://user:pass@host:port` form — paste it into the env var. Per-platform vars let you use a different proxy (or region) per site.
+
+### Cookies (alternative to proxy for FB / IG / YouTube)
+
+| Var | Purpose |
+|-----|---------|
+| `YT_COOKIE` | Logged-in YouTube browser cookie (or use `YT_PROXY_URL`). Optional `YT_PO_TOKEN` for BotGuard. |
+| `FB_COOKIE` | Logged-in Facebook browser cookie. |
+| `IG_COOKIE` | Logged-in Instagram `sessionid` cookie. |
+
+Copy cookie strings from your browser: DevTools → Network → click any request to the site → copy the `Cookie` request header value.
+
+### Cache (optional, durable)
+
+| Var | Purpose |
+|-----|---------|
+| `KV_REST_API_URL` + `KV_REST_API_TOKEN` | Vercel KV credentials. Without these, caching is in-memory per instance (resets on cold starts). With them, cache persists across instances/deploys. |
+
+### Verify your setup
+
+`GET /api/status` returns which platforms have a proxy/cookie configured (no secret values exposed):
+
+```bash
+curl https://YOUR-DOMAIN/api/status
+```
+
 ## Honest limitations
 
-- **YouTube signatures break periodically.** YouTube rotates its player JS every few weeks; `youtubei.js` gets patched by maintainers within days. When extraction fails, run `npm update youtubei.js` and redeploy. This is inherent to *any* non-yt-dlp approach — the original R-Gen project has the same fragility.
-- **Extracted YouTube URLs expire (~6h) and are IP-locked.** They must be consumed by the requester promptly; they cannot be cached and shared later.
-- **10s timeout.** Hobby tier caps each function at 10s. Extraction normally completes in 2–4s; very slow origins may time out.
-- **Facebook & TikTok block datacenter IPs.** Both return errors to Vercel's server IPs without authentication. To enable them, set env vars in the Vercel project:
-  - `FB_COOKIE` — a logged-in Facebook browser cookie string (copy from DevTools → Network → any request → Cookie header).
-  - `YT_COOKIE` / `YT_PO_TOKEN` — optional, hardens YouTube against throttling.
-  - TikTok has no clean cookie path; it needs a residential proxy or a tiny always-on backend.
+- **YouTube / Facebook / Instagram / TikTok block datacenter IPs.** Without a proxy or cookie, cold extractions from Vercel will be throttled (YouTube returns "Sign in to confirm you're not a bot"; Facebook returns HTTP 400). This is the platforms' anti-bot systems — the same wall yt-dlp users hit. A residential proxy (`PROXY_URL`) is the single fix that covers all of them.
+- **Caching mitigates this.** Successful extractions are cached (~5h, matching YouTube URL expiry), so a video that extracts once keeps serving instantly without re-hitting the platform — exactly how R-Gen stays reliable.
+- **YouTube signatures break periodically.** YouTube rotates its player JS every few weeks; `youtubei.js` gets patched by maintainers within days. When extraction fails, run `npm update youtubei.js` and redeploy.
+- **Extracted YouTube URLs expire (~6h) and are IP-locked** to the proxy/direct IP that requested them. Consume them promptly.
+- **10s timeout.** Hobby tier caps each function at 10s. Extraction normally completes in 2–4s; a slow proxy may push cold extracts close to the limit.
+- **Twitter/X works without auth** (public syndication endpoint).
 - **Not 1000+ sites.** yt-dlp-level breadth requires a persistent Python backend. This is the Vercel-native equivalent covering the most-used platforms.
 
 ## Legal
