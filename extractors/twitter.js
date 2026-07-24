@@ -22,7 +22,7 @@ export async function extract(url) {
   try {
     const res = await fetched(`https://cdn.syndication.twitter.com/tweet-result?id=${id}&token=0`, {
       headers: browserHeaders({ extra: { 'Accept': 'application/json' } })
-    });
+    }, 'twitter');
     if (res.ok) {
       const j = await res.json();
       meta.author = j?.user?.name || j?.user?.screen_name || null;
@@ -52,7 +52,7 @@ export async function extract(url) {
     try {
       const res = await fetched(`https://publish.twitter.com/oembed?url=${encodeURIComponent(url)}`, {
         headers: browserHeaders({ extra: { 'Accept': 'application/json' } })
-      });
+      }, 'twitter');
       if (res.ok) {
         const j = await res.json();
         const html = j?.html || '';
