@@ -50,6 +50,7 @@ curl "https://YOUR-DOMAIN/api/download?url=https://youtube.com/watch?v=dQw4w9WgX
 |----------|--------|--------|
 | YouTube | ✅ Live | [`youtubei.js`](https://github.com/LuanRT/YouTube.js) (InnerTube) |
 | TikTok | ✅ Live | built-in (zero-dep, public detail API + HTML fallback) |
+| Facebook | ⚠️ Beta | built-in (mobile HTML parse; needs `FB_COOKIE` for gated posts) |
 | Instagram, Facebook, Twitter/X, Reddit, SoundCloud, Vimeo, Pinterest, Twitch, Bilibili | 🔜 Detected, extractor TODO | — |
 
 ## Project structure
@@ -86,6 +87,10 @@ This repo is wired for Vercel. Import it on Vercel (or deploy via the Vercel API
 - **YouTube signatures break periodically.** YouTube rotates its player JS every few weeks; `youtubei.js` gets patched by maintainers within days. When extraction fails, run `npm update youtubei.js` and redeploy. This is inherent to *any* non-yt-dlp approach — the original R-Gen project has the same fragility.
 - **Extracted YouTube URLs expire (~6h) and are IP-locked.** They must be consumed by the requester promptly; they cannot be cached and shared later.
 - **10s timeout.** Hobby tier caps each function at 10s. Extraction normally completes in 2–4s; very slow origins may time out.
+- **Facebook & TikTok block datacenter IPs.** Both return errors to Vercel's server IPs without authentication. To enable them, set env vars in the Vercel project:
+  - `FB_COOKIE` — a logged-in Facebook browser cookie string (copy from DevTools → Network → any request → Cookie header).
+  - `YT_COOKIE` / `YT_PO_TOKEN` — optional, hardens YouTube against throttling.
+  - TikTok has no clean cookie path; it needs a residential proxy or a tiny always-on backend.
 - **Not 1000+ sites.** yt-dlp-level breadth requires a persistent Python backend. This is the Vercel-native equivalent covering the most-used platforms.
 
 ## Legal
